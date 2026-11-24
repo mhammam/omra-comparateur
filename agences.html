@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agences de voyages agréées — Omra Comparateur</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="entete">
+    <div class="conteneur entete-in">
+      <a class="logo" href="index.html"><span class="logo-signe">◆</span> Omra Comparateur</a>
+      <nav>
+        <a href="index.html">Offres</a>
+        <a href="agences.html" class="actif">Agences agréées</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="conteneur" style="padding-top:28px;padding-bottom:60px">
+    <h1 style="font-family:var(--titre);font-weight:500;margin:0 0 6px">Agences de voyages agréées</h1>
+    <p class="aide">Organisateurs / distributeurs de voyages selon l'annuaire officiel du
+      <a href="https://mtaess.gov.ma/fr/annuaires/annuaire-des-agences-de-voyages/organisateurs-distributeurs-de-voyages/" target="_blank" rel="noopener">Ministère du Tourisme (MTAESS)</a>.
+      Vérifiez qu'une agence y figure avant de payer.</p>
+
+    <div class="annuaire-outils">
+      <input type="search" id="q" placeholder="Rechercher une agence ou une adresse…">
+      <select id="ville"><option value="">Toutes les villes</option></select>
+    </div>
+    <p id="compte" style="font-weight:600"></p>
+    <table class="table-agences">
+      <thead><tr><th>Agence</th><th>Ville</th><th>Adresse</th></tr></thead>
+      <tbody id="corps"></tbody>
+    </table>
+  </main>
+
+  <footer class="pied"><div class="conteneur"><p>Données : annuaire public MTAESS. Mise à jour avec <code>scripts/import_agences.py</code>.</p></div></footer>
+
+  <script src="data/agences.js"></script>
+  <script>
+    (function () {
+      const A = window.AGENCES || [];
+      const $ = (s) => document.querySelector(s);
+      const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+      [...new Set(A.map((a) => a.ville))].sort((a, b) => a.localeCompare(b, "fr")).forEach((v) => $("#ville").add(new Option(v, v)));
+      function rendre() {
+        const q = norm($("#q").value.trim()), v = $("#ville").value;
+        const r = A.filter((a) => (!v || a.ville === v) && (!q || norm(a.nom + " " + a.adresse).includes(q)));
+        $("#compte").textContent = `${r.length} agence${r.length > 1 ? "s" : ""}`;
+        const corps = $("#corps");
+        corps.innerHTML = "";
+        r.slice(0, 500).forEach((a) => {
+          const tr = corps.insertRow();
+          [a.nom, a.ville, a.adresse].forEach((t) => (tr.insertCell().textContent = t));
+        });
+      }
+      $("#q").addEventListener("input", rendre);
+      $("#ville").addEventListener("change", rendre);
+      rendre();
+    })();
+  </script>
+</body>
+</html>
