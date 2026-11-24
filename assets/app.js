@@ -3,27 +3,41 @@
   "use strict";
   const L = window.OmraLogic;
   const OFFRES = window.OFFRES || [];
+  const AGENCES = window.AGENCES || [];
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
   const MAX_COMP = 4;
+  const NC = "n.c.";
   const selection = new Set();
   let etoilesMin = 0;
 
-  const fmtPrix = (n) => new Intl.NumberFormat("fr-MA").format(Math.round(n)) + " MAD";
-  const fmtDate = (s) => new Date(s + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-  const fmtDist = (m) => (m >= 1000 ? (m / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " km" : m + " m");
-  const etoiles = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  const fmtPrix = (n) => (n === null || n === undefined ? NC : new Intl.NumberFormat("fr-MA").format(Math.round(n)) + " MAD");
+  const fmtDate = (s, an = true) => new Date(s + "T12:00:00").toLocaleDateString("fr-FR", an ? { day: "numeric", month: "short", year: "numeric" } : { day: "numeric", month: "short" });
+  const fmtDist = (h) => {
+    if (!h || typeof h.distance_m !== "number") return "distance " + NC;
+    const m = h.distance_m, txt = m >= 1000 ? (m / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " km" : m + " m";
+    return (h.distance_source === "estimation" ? "≈ " : "") + txt;
+  };
+  const etoiles = (h) => (h && typeof h.etoiles === "number" ? "★".repeat(h.etoiles) + "☆".repeat(5 - h.etoiles) : "étoiles " + NC);
+  const nomHotel = (h) => (h && h.nom) || NC;
+  const libVol = (o) => (!o.vol ? "Vol " + NC : o.vol.type === "direct" ? "Direct" : "Escale" + (o.vol.escale ? " · " + o.vol.escale : ""));
+  const CH_LIB = { single: "Single", double: "Double", triple: "Triple", quadruple: "Quadruple", quintuple: "Quintuple", min: "à partir de" };
+
+  // Vérification dans l'annuaire officiel
+  const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  const ANNUAIRE = new Map(AGENCES.map((a) => [norm(a.nom), a]));
+  const agreee = (o) => ANNUAIRE.get(norm(o.agence));
 
   /* ---------- Initialisation ---------- */
-  const villes = [...new Set(OFFRES.map((o) => o.ville_depart))].sort((a, b) => a.localeCompare(b, "fr"));
+  const villes = [...new Set(OFFRES.map((o) => o.ville_depart).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
   villes.forEach((v) => $("#f-ville").add(new Option(v, v)));
   Object.entries(L.CRITERES).forEach(([k, c]) => $("#tri").add(new Option(c.libelle, k)));
-  if (OFFRES.some((o) => o.demo)) $("#bandeau-demo").hidden = false;
+  const nbAgences = new Set(OFFRES.map((o) => o.agence)).size;
+  $("#bandeau-info").innerHTML = `<strong>${OFFRES.length} offres réelles</strong> de ${nbAgences} agences agréées, relevées le ${fmtDate(window.COLLECTE || "2026-11-24")} sur leurs sites. Informations non publiées : « n.c. ». Confirmez toujours auprès de l'agence.`;
 
-  // Lecture des paramètres d'URL (recherche partageable)
   const params = new URLSearchParams(location.search);
-  const champs = { debut: "#f-debut", fin: "#f-fin", ville: "#f-ville", prixMax: "#f-prix", tri: "#tri" };
+  const champs = { debut: "#f-debut", fin: "#f-fin", ville: "#f-ville", prixMax: "#f-prix", tri: "#tri", chambre: "#f-chambre" };
   Object.entries(champs).forEach(([k, sel]) => { if (params.get(k)) $(sel).value = params.get(k); });
   if (params.get("vol")) { const r = $(`input[name=vol][value="${params.get("vol")}"]`); if (r) r.checked = true; }
 
@@ -32,36 +46,27 @@
     const num = (sel) => { const v = parseFloat($(sel).value); return isNaN(v) ? 0 : v; };
     const dm = num("#f-makkah"), dd = num("#f-medine");
     return {
-      debut: $("#f-debut").value,
-      fin: $("#f-fin").value,
+      debut: $("#f-debut").value, fin: $("#f-fin").value,
       mode: $("input[name=mode]:checked").value,
-      ville: $("#f-ville").value,
-      prixMax: num("#f-prix"),
-      vol: $("input[name=vol]:checked").value,
-      etoilesMin,
+      ville: $("#f-ville").value, chambre: $("#f-chambre").value,
+      prixMax: num("#f-prix"), vol: $("input[name=vol]:checked").value, etoilesMin,
       distMakkah: dm >= +$("#f-makkah").max ? 0 : dm,
       distMedine: dd >= +$("#f-medine").max ? 0 : dd,
-      nuitsMin: num("#f-nmin"),
-      nuitsMax: num("#f-nmax"),
-      agence: $("#f-agence").value.trim(),
+      dureeMin: num("#f-dmin"), dureeMax: num("#f-dmax"),
+      agence: $("#f-agence").value.trim(), completes: $("#f-completes").checked,
     };
   }
-  function lirePoids() {
-    return { prix: +$("#w-prix").value, etoiles: +$("#w-etoiles").value, distance: +$("#w-distance").value, direct: +$("#w-direct").value };
-  }
+  const lirePoids = () => ({ prix: +$("#w-prix").value, etoiles: +$("#w-etoiles").value, distance: +$("#w-distance").value, direct: +$("#w-direct").value });
 
   function majSorties() {
     const m = +$("#f-makkah").value, d = +$("#f-medine").value;
-    $("#o-makkah").textContent = m >= +$("#f-makkah").max ? "toutes" : "≤ " + fmtDist(m);
-    $("#o-medine").textContent = d >= +$("#f-medine").max ? "toutes" : "≤ " + fmtDist(d);
+    $("#o-makkah").textContent = m >= +$("#f-makkah").max ? "toutes" : "≤ " + fmtDist({ distance_m: m });
+    $("#o-medine").textContent = d >= +$("#f-medine").max ? "toutes" : "≤ " + fmtDist({ distance_m: d });
     const poids = lirePoids(), tot = Object.values(poids).reduce((a, b) => a + b, 0) || 1;
     $$(".poids output").forEach((o) => { const k = o.dataset.for.slice(2); o.textContent = Math.round((100 * poids[k]) / tot) + " %"; });
   }
 
   /* ---------- Rendu ---------- */
-  let derniers = [];
-  let scores = new Map();
-
   function rendre() {
     majSorties();
     const f = lireFiltres();
@@ -71,39 +76,67 @@
       return;
     }
     const filtrees = L.filtrer(OFFRES, f);
-    scores = L.scorer(filtrees, lirePoids());
-    derniers = L.trier(filtrees, $("#tri").value, scores);
+    const scores = L.scorer(filtrees, lirePoids(), f.chambre);
+    const liste_ = L.trier(filtrees, $("#tri").value, scores, f.chambre);
 
-    $("#compte").textContent = `${derniers.length} offre${derniers.length > 1 ? "s" : ""} sur ${OFFRES.length}`;
+    $("#compte").textContent = `${liste_.length} offre${liste_.length > 1 ? "s" : ""} sur ${OFFRES.length}`;
     const liste = $("#liste");
     liste.innerHTML = "";
-    if (!derniers.length) {
-      liste.innerHTML = '<li class="vide">Aucune offre ne correspond. Élargissez les dates, le budget ou la distance.</li>';
+    if (!liste_.length) {
+      liste.innerHTML = '<li class="vide">Aucune offre ne correspond. Élargissez les dates, le budget, ou retirez les filtres étoiles / distance (beaucoup d\'agences ne publient pas ces informations).</li>';
       return;
     }
     const tpl = $("#tpl-offre");
-    derniers.forEach((o, i) => {
+    liste_.forEach((o, i) => {
       const n = tpl.content.cloneNode(true);
       const li = $(".offre", n);
       li.dataset.id = o.id;
-      $(".agence", n).innerHTML = `<span class="rang">#${i + 1}</span>`;
-      $(".agence", n).append(`${o.agence} · départ ${o.ville_depart}`);
-      $(".dates", n).textContent = `${fmtDate(o.date_depart)} → ${fmtDate(o.date_retour)} · ${L.nuits(o)} nuits · chambre ${o.chambre.toLowerCase()}`;
+      $(".titre", n).innerHTML = `<span class="rang">#${i + 1}</span>`;
+      $(".titre", n).append(o.titre);
+      const ag = agreee(o);
+      const agEl = $(".agence", n);
+      agEl.textContent = (o.marque ? `${o.marque} — ` : "") + `${ag ? ag.nom : o.agence} · ${o.ville_agence || ""}`;
+      const badge = document.createElement("span");
+      badge.className = ag ? "badge ok" : "badge ko";
+      badge.textContent = ag ? "✓ Agréée MTAESS" : "⚠ Non trouvée dans l'annuaire";
+      agEl.append(" ", badge);
       $(".score span", n).textContent = scores.get(o.id);
-      [["hm", o.hotel_makkah, o.nuits_makkah], ["hd", o.hotel_medine, o.nuits_medine]].forEach(([c, h, nb]) => {
+
+      // Départs
+      const dps = L.departsDansPeriode(o, f.debut, f.fin, f.mode);
+      const dEl = $(".departs", n);
+      if (!dps.length) dEl.textContent = "Dates : " + NC;
+      else if (dps[0].estime) dEl.textContent = `📅 ${o.periode.libelle} — dates exactes à demander à l'agence`;
+      else dEl.textContent = "📅 Départs : " + dps.map((d) => fmtDate(d.debut, false)).join(" · ") + (o.ville_depart ? ` — de ${o.ville_depart}` : "");
+
+      [["hm", o.hotel_makkah], ["hd", o.hotel_medine]].forEach(([c, h]) => {
         const b = $("." + c, n);
-        $(".nuits", b).textContent = `${nb} nuits`;
-        $(".nom", b).textContent = h.nom;
-        $(".etoiles", b).textContent = etoiles(h.etoiles);
-        $(".dist", b).textContent = fmtDist(h.distance_m);
+        $(".nom", b).textContent = nomHotel(h);
+        $(".etoiles", b).textContent = etoiles(h);
+        $(".dist", b).textContent = fmtDist(h);
+        if (!h || !h.nom) b.classList.add("inconnu");
       });
-      $(".vol .nom", n).textContent = o.vol.compagnie + (o.vol.arrivee ? ` → ${o.vol.arrivee}` : "");
+      $(".vol .nom", n).textContent = o.duree_jours ? `${o.duree_jours} jours` : "Durée " + NC;
       const p = $(".pastille", n);
-      p.className = "pastille " + o.vol.type;
-      p.textContent = o.vol.type === "direct" ? "Direct" : `Escale · ${o.vol.escale}`;
-      $(".inclus", n).textContent = "Inclus : " + o.inclus.join(" · ");
-      $(".prix strong", n).textContent = fmtPrix(o.prix);
-      $(".prix small", n).textContent = `/ pers. · ${fmtPrix(L.prixNuit(o))} / nuit`;
+      p.className = "pastille " + (L.typeVol(o) || "nc");
+      p.textContent = libVol(o);
+
+      // Prix par chambre
+      const ch = $(".chambres", n);
+      L.CHAMBRES.filter((c) => L.prixPour(o, c) !== null).forEach((c) => {
+        const s = document.createElement("span");
+        s.className = "chip" + (c === f.chambre ? " actif" : "");
+        s.textContent = `${CH_LIB[c]} ${fmtPrix(L.prixPour(o, c))}`;
+        ch.append(s);
+      });
+      $(".inclus", n).textContent = [o.repas, ...(o.inclus || [])].filter(Boolean).length ? "Inclus : " + [o.repas, ...(o.inclus || [])].filter(Boolean).join(" · ") : "";
+      $(".note", n).textContent = o.note ? "ℹ️ " + o.note : "";
+      const prix = L.prixPour(o, f.chambre);
+      $(".prix strong", n).textContent = fmtPrix(prix);
+      const pj = L.prixJour(o, f.chambre);
+      $(".prix small", n).textContent = (f.chambre === "min" ? "à partir de, par pers." : `par pers. en ${CH_LIB[f.chambre].toLowerCase()}`) + (pj && o.duree_jours ? ` · ${fmtPrix(pj)} / jour` : "");
+      const a = $(".lien-source", n);
+      a.href = o.source;
       const cb = $(".comp-case input", n);
       cb.checked = selection.has(o.id);
       li.classList.toggle("selection", cb.checked);
@@ -118,6 +151,7 @@
     ["debut", "fin", "prixMax"].forEach((k) => f[k] && p.set(k, f[k]));
     if (f.ville !== "toutes") p.set("ville", f.ville);
     if (f.vol !== "tous") p.set("vol", f.vol);
+    if (f.chambre !== "min") p.set("chambre", f.chambre);
     if ($("#tri").value !== "score") p.set("tri", $("#tri").value);
     const q = p.toString();
     try { history.replaceState(null, "", q ? "?" + q : location.pathname); } catch (e) { /* aperçu sandboxé */ }
@@ -126,13 +160,12 @@
   /* ---------- Comparateur ---------- */
   function basculer(id, cb, li) {
     if (cb.checked) {
-      if (selection.size >= MAX_COMP) { cb.checked = false; alertDouce(`Maximum ${MAX_COMP} offres à comparer.`); return; }
+      if (selection.size >= MAX_COMP) { cb.checked = false; $("#comp-compte").textContent = `Maximum ${MAX_COMP} offres à comparer.`; return; }
       selection.add(id);
     } else selection.delete(id);
     li.classList.toggle("selection", cb.checked);
     majBarre();
   }
-  function alertDouce(msg) { $("#comp-compte").textContent = msg; $("#barre-comp").hidden = false; setTimeout(majBarre, 1800); }
   function majBarre() {
     $("#barre-comp").hidden = selection.size === 0;
     $("#comp-compte").textContent = `${selection.size} offre${selection.size > 1 ? "s" : ""} sélectionnée${selection.size > 1 ? "s" : ""}` + (selection.size < 2 ? " — choisissez-en au moins 2" : "");
@@ -140,36 +173,47 @@
   }
 
   function ouvrirComparateur() {
+    const ch = $("#f-chambre").value;
     const offres = OFFRES.filter((o) => selection.has(o.id));
-    const sc = L.scorer(offres, lirePoids());
-    // [libellé, valeur affichée, valeur numérique, sens ("min"|"max"|null)]
+    const sc = L.scorer(offres, lirePoids(), ch);
+    const num = (v) => (v === null || v === undefined ? null : v);
+    const dist = (h) => (h && typeof h.distance_m === "number" ? h.distance_m : null);
+    const et = (h) => (h && typeof h.etoiles === "number" ? h.etoiles : null);
+    // [libellé, affichage, valeur numérique, sens]
     const lignes = [
       ["Score (entre ces offres)", (o) => sc.get(o.id), (o) => sc.get(o.id), "max"],
-      ["Prix / personne", (o) => fmtPrix(o.prix), (o) => o.prix, "min"],
-      ["Prix / nuit", (o) => fmtPrix(L.prixNuit(o)), (o) => L.prixNuit(o), "min"],
-      ["Dates", (o) => `${fmtDate(o.date_depart)} → ${fmtDate(o.date_retour)}`, null, null],
-      ["Nuits Makkah / Médine", (o) => `${o.nuits_makkah} / ${o.nuits_medine}`, (o) => L.nuits(o), "max"],
-      ["Départ", (o) => o.ville_depart, null, null],
-      ["Vol", (o) => `${o.vol.compagnie} — ${o.vol.type === "direct" ? "direct" : "escale " + o.vol.escale}`, (o) => (o.vol.type === "direct" ? 1 : 0), "max"],
-      ["Hôtel Makkah", (o) => o.hotel_makkah.nom, null, null],
-      ["Étoiles Makkah", (o) => etoiles(o.hotel_makkah.etoiles), (o) => o.hotel_makkah.etoiles, "max"],
-      ["Distance Haram", (o) => fmtDist(o.hotel_makkah.distance_m), (o) => o.hotel_makkah.distance_m, "min"],
-      ["Hôtel Médine", (o) => o.hotel_medine.nom, null, null],
-      ["Étoiles Médine", (o) => etoiles(o.hotel_medine.etoiles), (o) => o.hotel_medine.etoiles, "max"],
-      ["Distance Mosquée du Prophète", (o) => fmtDist(o.hotel_medine.distance_m), (o) => o.hotel_medine.distance_m, "min"],
-      ["Chambre", (o) => o.chambre, null, null],
-      ["Inclus", (o) => o.inclus.join(", "), (o) => o.inclus.length, "max"],
+      ...L.CHAMBRES.map((c) => [`Prix ${CH_LIB[c].toLowerCase()}`, (o) => fmtPrix(L.prixPour(o, c)), (o) => L.prixPour(o, c), "min"])
+        .filter(([, , v]) => offres.some((o) => v(o) !== null)),
+      ["Prix / jour", (o) => (o.duree_jours ? fmtPrix(L.prixJour(o, ch)) : NC), (o) => (o.duree_jours ? L.prixJour(o, ch) : null), "min"],
+      ["Départs", (o) => { const d = L.departs(o); return !d.length ? NC : d[0].estime ? o.periode.libelle : d.map((x) => fmtDate(x.debut, false)).join(", "); }, null, null],
+      ["Durée", (o) => (o.duree_jours ? o.duree_jours + " jours" : NC), (o) => num(o.duree_jours), "max"],
+      ["Vol", libVol, (o) => ({ direct: 1, escale: 0 }[L.typeVol(o)] ?? null), "max"],
+      ["Hôtel Makkah", (o) => nomHotel(o.hotel_makkah), null, null],
+      ["Étoiles Makkah", (o) => etoiles(o.hotel_makkah), (o) => et(o.hotel_makkah), "max"],
+      ["Distance Haram", (o) => fmtDist(o.hotel_makkah), (o) => dist(o.hotel_makkah), "min"],
+      ["Hôtel Médine", (o) => nomHotel(o.hotel_medine), null, null],
+      ["Étoiles Médine", (o) => etoiles(o.hotel_medine), (o) => et(o.hotel_medine), "max"],
+      ["Distance Mosquée du Prophète", (o) => fmtDist(o.hotel_medine), (o) => dist(o.hotel_medine), "min"],
+      ["Repas", (o) => o.repas || NC, null, null],
+      ["Inclus", (o) => (o.inclus && o.inclus.length ? o.inclus.join(", ") : NC), null, null],
+      ["Agréée MTAESS", (o) => (agreee(o) ? "✓ Oui" : "⚠ Non trouvée"), (o) => (agreee(o) ? 1 : 0), "max"],
     ];
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    let html = "<table><thead><tr><th></th>" + offres.map((o) => `<td>${esc(o.agence)}<br><small>${esc(o.id)}</small></td>`).join("") + "</tr></thead><tbody>";
+    let html = "<table><thead><tr><th></th>" + offres.map((o) => `<td>${esc(o.titre)}<br><small>${esc(o.agence)} · <a href="${esc(o.source)}" target="_blank" rel="noopener">source ↗</a></small></td>`).join("") + "</tr></thead><tbody>";
     lignes.forEach(([lib, aff, val, sens]) => {
       let best = null;
       if (val && sens) {
-        const vs = offres.map(val);
-        const b = sens === "min" ? Math.min(...vs) : Math.max(...vs);
-        if (vs.some((v) => v !== b)) best = b;
+        const vs = offres.map(val).filter((v) => v !== null && v !== undefined);
+        if (vs.length > 1) {
+          const b = sens === "min" ? Math.min(...vs) : Math.max(...vs);
+          if (vs.some((v) => v !== b)) best = b;
+        }
       }
-      html += `<tr><th>${lib}</th>` + offres.map((o) => `<td class="${best !== null && val(o) === best ? "meilleur" : ""}">${esc(aff(o))}</td>`).join("") + "</tr>";
+      html += `<tr><th>${lib}</th>` + offres.map((o) => {
+        const v = val ? val(o) : null, txt = aff(o);
+        const cls = best !== null && v === best ? "meilleur" : String(txt).includes(NC) ? "nc" : "";
+        return `<td class="${cls}">${esc(txt)}</td>`;
+      }).join("") + "</tr>";
     });
     $("#comp-table").innerHTML = html + "</tbody></table>";
     $("#comparateur").showModal();
@@ -177,7 +221,7 @@
 
   /* ---------- Événements ---------- */
   $("#recherche").addEventListener("submit", (e) => { e.preventDefault(); rendre(); $(".resultats").scrollIntoView({ behavior: "smooth" }); });
-  ["#f-debut", "#f-fin", "#f-ville", "#f-prix", "#tri", "#f-nmin", "#f-nmax"].forEach((s) => $(s).addEventListener("change", rendre));
+  ["#f-debut", "#f-fin", "#f-ville", "#f-prix", "#tri", "#f-dmin", "#f-dmax", "#f-chambre", "#f-completes"].forEach((s) => $(s).addEventListener("change", rendre));
   ["#f-makkah", "#f-medine", "#f-agence", "#w-prix", "#w-etoiles", "#w-distance", "#w-direct"].forEach((s) => $(s).addEventListener("input", rendre));
   $$("input[name=mode], input[name=vol]").forEach((r) => r.addEventListener("change", rendre));
   $$("#f-etoiles button").forEach((b) => b.addEventListener("click", () => {
@@ -188,7 +232,9 @@
   }));
   $("#reinit").addEventListener("click", () => {
     $("#recherche").reset();
-    ["#f-nmin", "#f-nmax", "#f-agence"].forEach((s) => ($(s).value = ""));
+    ["#f-dmin", "#f-dmax", "#f-agence"].forEach((s) => ($(s).value = ""));
+    $("#f-ville").value = "toutes";
+    $("#f-completes").checked = false;
     $("#f-makkah").value = $("#f-makkah").max;
     $("#f-medine").value = $("#f-medine").max;
     $("input[name=vol][value=tous]").checked = true;

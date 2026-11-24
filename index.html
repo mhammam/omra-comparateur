@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Comparateur Omra Maroc — offres, hôtels, vols</title>
-  <meta name="description" content="Recherchez et comparez les offres Omra des agences marocaines : prix, étoiles des hôtels, distance au Haram et à la Mosquée du Prophète, vols directs ou avec escale.">
+  <meta name="description" content="Recherchez et comparez les offres Omra des agences marocaines agréées : prix par type de chambre, hôtels, distance au Haram et à la Mosquée du Prophète, vols directs ou avec escale.">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -21,25 +21,30 @@
   <section class="hero">
     <div class="conteneur">
       <h1>Trouvez votre Omra au meilleur rapport qualité&nbsp;/&nbsp;prix</h1>
-      <p class="sous-titre">Comparez les offres des agences marocaines : prix, hôtels à Makkah et Médine, distance aux mosquées, vols directs ou avec escale.</p>
+      <p class="sous-titre">Offres publiées par des agences marocaines agréées : prix par type de chambre, hôtels à Makkah et Médine, distance aux mosquées, vols directs ou avec escale.</p>
 
       <form id="recherche" class="recherche" autocomplete="off">
         <label>Du <input type="date" name="debut" id="f-debut"></label>
         <label>Au <input type="date" name="fin" id="f-fin"></label>
-        <label>Départ de
-          <select name="ville" id="f-ville"><option value="toutes">Toutes les villes</option></select>
+        <label>Chambre
+          <select id="f-chambre">
+            <option value="min">La moins chère</option>
+            <option value="quintuple">Quintuple (5)</option>
+            <option value="quadruple">Quadruple (4)</option>
+            <option value="triple">Triple (3)</option>
+            <option value="double">Double (2)</option>
+            <option value="single">Single (1)</option>
+          </select>
         </label>
         <label>Budget max (MAD)
-          <input type="number" name="prixMax" id="f-prix" min="0" step="500" placeholder="ex. 20000">
+          <input type="number" name="prixMax" id="f-prix" min="0" step="500" placeholder="ex. 25000">
         </label>
         <button type="submit" class="btn-principal">Rechercher</button>
       </form>
     </div>
   </section>
 
-  <div class="bandeau-demo" id="bandeau-demo" hidden>
-    ⚠️ Offres de <strong>démonstration</strong> (agences fictives, prix indicatifs) — à remplacer par les offres réelles des agences.
-  </div>
+  <div class="bandeau-info" id="bandeau-info"></div>
 
   <main class="conteneur mise-en-page">
     <aside class="filtres" aria-label="Filtres">
@@ -49,6 +54,11 @@
         <legend>Période</legend>
         <label class="radio"><input type="radio" name="mode" value="depart" checked> Départ dans la période</label>
         <label class="radio"><input type="radio" name="mode" value="sejour"> Séjour entièrement dans la période</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ville de départ</legend>
+        <select id="f-ville"><option value="toutes">Toutes</option></select>
       </fieldset>
 
       <fieldset>
@@ -76,22 +86,25 @@
       </fieldset>
 
       <fieldset>
-        <legend>Durée (nuits)</legend>
+        <legend>Durée (jours)</legend>
         <div class="deux">
-          <input type="number" id="f-nmin" min="1" placeholder="min">
-          <input type="number" id="f-nmax" min="1" placeholder="max">
+          <input type="number" id="f-dmin" min="1" placeholder="min">
+          <input type="number" id="f-dmax" min="1" placeholder="max">
         </div>
       </fieldset>
 
       <fieldset>
         <legend>Agence</legend>
-        <input type="search" id="f-agence" placeholder="Nom de l'agence">
+        <input type="search" id="f-agence" placeholder="Nom, ville…">
+        <label class="radio"><input type="checkbox" id="f-completes"> Seulement les offres détaillées</label>
       </fieldset>
+
+      <p class="aide">Un filtre actif (étoiles, distance, vol, durée) écarte les offres où l'agence n'a pas publié l'information.</p>
 
       <details class="poids">
         <summary>Pondération du score global</summary>
-        <p class="aide">Ajustez l'importance de chaque critère dans le classement « Meilleur score ».</p>
-        <label>Prix <output data-for="w-prix"></output><input type="range" id="w-prix" min="0" max="100" value="40"></label>
+        <p class="aide">Une donnée non publiée reçoit une note neutre.</p>
+        <label>Prix / jour <output data-for="w-prix"></output><input type="range" id="w-prix" min="0" max="100" value="40"></label>
         <label>Étoiles <output data-for="w-etoiles"></output><input type="range" id="w-etoiles" min="0" max="100" value="25"></label>
         <label>Proximité mosquées <output data-for="w-distance"></output><input type="range" id="w-distance" min="0" max="100" value="25"></label>
         <label>Vol direct <output data-for="w-direct"></output><input type="range" id="w-direct" min="0" max="100" value="10"></label>
@@ -127,12 +140,13 @@
       <button type="button" class="fermer" id="comp-fermer" aria-label="Fermer">✕</button>
     </div>
     <div class="comp-corps" id="comp-table"></div>
-    <p class="aide">En vert : la meilleure valeur de chaque ligne. Distances approximatives à pied, à confirmer avec l'agence.</p>
+    <p class="aide">En vert : la meilleure valeur de chaque ligne. « n.c. » = non communiqué par l'agence. « ≈ » = distance estimée (référence), à confirmer.</p>
   </dialog>
 
   <footer class="pied">
     <div class="conteneur">
-      <p>Avant de réserver, vérifiez que l'agence figure dans l'<a href="agences.html">annuaire officiel du Ministère du Tourisme</a>. Les prix et disponibilités sont donnés par les agences et peuvent évoluer.</p>
+      <p>Offres relevées sur les sites publics des agences. Prix et disponibilités peuvent changer : confirmez toujours auprès de l'agence. Vérifiez que l'agence figure dans l'<a href="agences.html">annuaire officiel du Ministère du Tourisme</a> avant de payer.</p>
+      <p>Vous êtes une agence agréée et souhaitez publier vos offres ? Voir le format dans le <a href="https://github.com/mhammam/omra-comparateur#ajouter-une-offre">README</a>.</p>
     </div>
   </footer>
 
@@ -140,36 +154,43 @@
     <li class="offre">
       <div class="offre-tete">
         <div>
+          <p class="titre"></p>
           <p class="agence"></p>
-          <p class="dates"></p>
         </div>
         <div class="score" title="Score global (0–100)"><span></span><small>score</small></div>
       </div>
+      <p class="departs"></p>
       <div class="offre-corps">
         <div class="hotel hm">
-          <p class="lieu">Makkah · <span class="nuits"></span></p>
+          <p class="lieu">Makkah</p>
           <p class="nom"></p>
           <p class="meta"><span class="etoiles"></span> <span class="dist"></span></p>
         </div>
         <div class="hotel hd">
-          <p class="lieu">Médine · <span class="nuits"></span></p>
+          <p class="lieu">Médine</p>
           <p class="nom"></p>
           <p class="meta"><span class="etoiles"></span> <span class="dist"></span></p>
         </div>
         <div class="vol">
-          <p class="lieu">Vol</p>
+          <p class="lieu">Vol · durée</p>
           <p class="nom"></p>
           <p class="meta"><span class="pastille"></span></p>
         </div>
       </div>
+      <div class="chambres"></div>
       <p class="inclus"></p>
+      <p class="note"></p>
       <div class="offre-pied">
         <div class="prix"><strong></strong><small></small></div>
-        <label class="comp-case"><input type="checkbox"> Comparer</label>
+        <div class="actions">
+          <a class="lien-source" target="_blank" rel="noopener">Voir l'offre ↗</a>
+          <label class="comp-case"><input type="checkbox"> Comparer</label>
+        </div>
       </div>
     </li>
   </template>
 
+  <script src="data/agences.js"></script>
   <script src="data/offres.js"></script>
   <script src="assets/logic.js"></script>
   <script src="assets/app.js"></script>

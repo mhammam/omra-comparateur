@@ -39,7 +39,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--or); 
 .btn-principal:hover { background: #a3772f; }
 .btn-lien { background: none; border: 0; color: var(--vert-2); text-decoration: underline; cursor: pointer; font: inherit; padding: 6px 0; }
 
-.bandeau-demo { background: #fff4d6; border-bottom: 1px solid #ecd9a3; color: #6d5414; text-align: center; padding: 9px 16px; font-size: .9rem; }
+.bandeau-info { background: #eef5f1; border-bottom: 1px solid #cfe3d8; color: #1d4a3c; text-align: center; padding: 9px 16px; font-size: .9rem; }
 
 /* Mise en page */
 .mise-en-page { display: grid; grid-template-columns: 270px 1fr; gap: 28px; padding-top: 28px; padding-bottom: 60px; }
@@ -74,8 +74,8 @@ input[type=range] { padding: 0; border: 0; accent-color: var(--vert); }
 .offre:hover { box-shadow: 0 6px 18px rgba(15,61,51,.08); }
 .offre.selection { border-color: var(--or); box-shadow: 0 0 0 2px rgba(184,137,59,.25); }
 .offre-tete { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
-.agence { margin: 0; font-weight: 700; font-size: 1.02rem; }
-.agence .rang { color: var(--or); font-family: var(--titre); margin-right: 6px; }
+.titre { margin: 0; font-weight: 700; font-size: 1.05rem; }
+.titre .rang { color: var(--or); font-family: var(--titre); margin-right: 6px; }
 .dates { margin: 2px 0 0; color: var(--gris); font-size: .9rem; }
 .score { min-width: 58px; text-align: center; background: var(--sable); border-radius: 12px; padding: 6px 8px; }
 .score span { display: block; font-family: var(--titre); font-size: 1.4rem; color: var(--vert); line-height: 1; }
@@ -135,3 +135,25 @@ input[type=range] { padding: 0; border: 0; accent-color: var(--vert); }
   .offre-corps { grid-template-columns: 1fr; }
   .annuaire-outils { grid-template-columns: 1fr; }
 }
+
+/* Données réelles */
+.agence { margin: 2px 0 0; color: var(--gris); font-size: .88rem; }
+.badge { display: inline-block; border-radius: 20px; padding: 1px 8px; font-size: .74rem; font-weight: 700; margin-left: 4px; white-space: nowrap; }
+.badge.ok { background: var(--bon); color: var(--bon-texte); }
+.badge.ko { background: #fdeee0; color: #93501a; }
+.badge.omra { background: #f3ead8; color: #7a5a1d; }
+.departs { margin: 10px 0 0; font-size: .88rem; }
+.hotel.inconnu .nom, .meta, .pastille.nc { color: var(--gris); }
+.pastille.nc { background: #eee; }
+.chambres { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.chip { border: 1px solid var(--bord); border-radius: 20px; padding: 2px 10px; font-size: .82rem; white-space: nowrap; }
+.chip.actif { background: var(--vert); color: #fff; border-color: var(--vert); }
+.note { margin: 0 0 8px; font-size: .84rem; color: #7a5a1d; }
+.note:empty, .inclus:empty { display: none; }
+.actions { display: flex; align-items: center; gap: 16px; }
+.lien-source { font-size: .9rem; font-weight: 600; }
+.comp-corps td.nc { color: #9aa09c; }
+.pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 14px 0; }
+.pagination button { border: 1px solid var(--bord); background: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+.pagination button:disabled { opacity: .4; cursor: default; }
+.radio input[type=checkbox] { width: auto; accent-color: var(--vert); }

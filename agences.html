@@ -19,43 +19,71 @@
 
   <main class="conteneur" style="padding-top:28px;padding-bottom:60px">
     <h1 style="font-family:var(--titre);font-weight:500;margin:0 0 6px">Agences de voyages agréées</h1>
-    <p class="aide">Organisateurs / distributeurs de voyages selon l'annuaire officiel du
-      <a href="https://mtaess.gov.ma/fr/annuaires/annuaire-des-agences-de-voyages/organisateurs-distributeurs-de-voyages/" target="_blank" rel="noopener">Ministère du Tourisme (MTAESS)</a>.
+    <p class="aide">Les <strong id="total"></strong> organisateurs / distributeurs de voyages de l'annuaire officiel du
+      <a href="https://mtaess.gov.ma/fr/annuaires/annuaire-des-agences-de-voyages/organisateurs-distributeurs-de-voyages/" target="_blank" rel="noopener">Ministère du Tourisme (MTAESS)</a>, extrait le 24/11/2026.
       Vérifiez qu'une agence y figure avant de payer.</p>
 
     <div class="annuaire-outils">
       <input type="search" id="q" placeholder="Rechercher une agence ou une adresse…">
       <select id="ville"><option value="">Toutes les villes</option></select>
     </div>
+    <p style="display:flex;gap:18px;flex-wrap:wrap;margin:0 0 10px">
+      <label class="radio"><input type="checkbox" id="omra"> Nom évoquant l'Omra / Hajj</label>
+      <label class="radio"><input type="checkbox" id="avecoffres"> Avec offres publiées sur ce site</label>
+    </p>
     <p id="compte" style="font-weight:600"></p>
     <table class="table-agences">
       <thead><tr><th>Agence</th><th>Ville</th><th>Adresse</th></tr></thead>
       <tbody id="corps"></tbody>
     </table>
+    <div class="pagination"><button id="prec">← Précédent</button><span id="page"></span><button id="suiv">Suivant →</button></div>
   </main>
 
-  <footer class="pied"><div class="conteneur"><p>Données : annuaire public MTAESS. Mise à jour avec <code>scripts/import_agences.py</code>.</p></div></footer>
+  <footer class="pied"><div class="conteneur"><p>Données : annuaire public MTAESS. « Nom évoquant l'Omra » est un repérage automatique par mots-clés (Omra, Hajj, Makkah, Médine, Haram…), indicatif seulement.</p></div></footer>
 
   <script src="data/agences.js"></script>
+  <script src="data/offres.js"></script>
   <script>
     (function () {
       const A = window.AGENCES || [];
+      const O = window.OFFRES || [];
       const $ = (s) => document.querySelector(s);
-      const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+      const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+      const avecOffres = new Map();
+      O.forEach((o) => avecOffres.set(norm(o.agence), (avecOffres.get(norm(o.agence)) || 0) + 1));
+      const PAGE = 100;
+      let page = 0;
+      $("#total").textContent = A.length.toLocaleString("fr-FR");
       [...new Set(A.map((a) => a.ville))].sort((a, b) => a.localeCompare(b, "fr")).forEach((v) => $("#ville").add(new Option(v, v)));
+      const p = new URLSearchParams(location.search);
+      if (p.get("q")) $("#q").value = p.get("q");
       function rendre() {
-        const q = norm($("#q").value.trim()), v = $("#ville").value;
-        const r = A.filter((a) => (!v || a.ville === v) && (!q || norm(a.nom + " " + a.adresse).includes(q)));
-        $("#compte").textContent = `${r.length} agence${r.length > 1 ? "s" : ""}`;
+        const q = norm($("#q").value), v = $("#ville").value, om = $("#omra").checked, ao = $("#avecoffres").checked;
+        const r = A.filter((a) => (!v || a.ville === v) && (!q || norm(a.nom + " " + a.adresse).includes(q)) && (!om || a.omra_probable) && (!ao || avecOffres.has(norm(a.nom))));
+        const pages = Math.max(1, Math.ceil(r.length / PAGE));
+        page = Math.min(page, pages - 1);
+        $("#compte").textContent = `${r.length.toLocaleString("fr-FR")} agence${r.length > 1 ? "s" : ""}`;
+        $("#page").textContent = `Page ${page + 1} / ${pages}`;
+        $("#prec").disabled = page === 0;
+        $("#suiv").disabled = page >= pages - 1;
         const corps = $("#corps");
         corps.innerHTML = "";
-        r.slice(0, 500).forEach((a) => {
+        r.slice(page * PAGE, (page + 1) * PAGE).forEach((a) => {
           const tr = corps.insertRow();
-          [a.nom, a.ville, a.adresse].forEach((t) => (tr.insertCell().textContent = t));
+          const td = tr.insertCell();
+          td.textContent = a.nom;
+          if (a.omra_probable) { const b = document.createElement("span"); b.className = "badge omra"; b.textContent = "Omra"; td.append(" ", b); }
+          const n = avecOffres.get(norm(a.nom));
+          if (n) { const l = document.createElement("a"); l.className = "badge ok"; l.href = "index.html"; l.textContent = `${n} offre${n > 1 ? "s" : ""}`; td.append(" ", l); }
+          tr.insertCell().textContent = a.ville;
+          tr.insertCell().textContent = a.adresse;
         });
       }
-      $("#q").addEventListener("input", rendre);
-      $("#ville").addEventListener("change", rendre);
+      const reset = () => { page = 0; rendre(); };
+      $("#q").addEventListener("input", reset);
+      ["#ville", "#omra", "#avecoffres"].forEach((s) => $(s).addEventListener("change", reset));
+      $("#prec").addEventListener("click", () => { page--; rendre(); });
+      $("#suiv").addEventListener("click", () => { page++; rendre(); });
       rendre();
     })();
   </script>
